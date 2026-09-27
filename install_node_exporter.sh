@@ -102,4 +102,4 @@ echo "服务状态："
 systemctl status node_exporter --no-pager
 
 
-sudo chown -R opuser.opuser /data/node_exporter
+sudo chown -R opuser:opuser /data/node_exporter
