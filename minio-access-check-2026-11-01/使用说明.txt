@@ -1,0 +1,53 @@
+# minio - 匿名 自动配置流程
+检查匿名用户权限： bash minio-batch-policy.sh
+应用匿名用户权限： bash minio-batch-policy.sh --apply
+
+# minio - 匿名 手动 配置流程
+## 获取权限-匿名用户 （默认的匿名只读用户有list所有文件权限）
+mc anonymous get-json minio/images
+mc anonymous get-json minio/trans-free-video | jq .
+
+## 自定义 policy 权限（限制只读无list权限）- 桶名称不同 "arn:aws:s3:::pages/*" 不同
+cat > policy/pages-readonly-no-list-policy.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowPublicReadOnly",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": ["*"]
+      },
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::pages/*"
+      ]
+    }
+  ]
+}
+EOF
+
+mc anonymous set-json policy/pages-readonly-no-list-policy.json minio/pages
+
+
+# 补充说明 -  nginx 针对外网请求minio 只读配置：
+1. 外网通常是只读minio，可以在 nginx 的 location 这样加
+       location ~^/oss {
+       # 加载 MinIO 安全限制规则 （只读访问）
+       include /data/openresty/nginx/conf/cscnginx/rules/minio-security.conf;
+	   
+       proxy_buffering off;
+       proxy_set_header Host $http_host;
+       rewrite ^/oss/(.*)$ /$1 break;
+       proxy_pass http://cscminio;
+       }
+	  
+2. /data/openresty/nginx/conf/cscnginx/rules/minio-security.conf 文件内容
+      # 只允许 GET、HEAD、OPTIONS
+      if ($request_method !~ ^(GET|HEAD|OPTIONS)$) { return 405; }
+      # 禁止 /oss/minio 及其子路径
+      if ($uri ~* ^/oss/minio(?:/|$)) { return 403; }
+      # 禁止 /minio 及其子路径
+      if ($uri ~* ^/minio(?:/|$)) { return 403; }
